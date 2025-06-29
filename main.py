@@ -183,8 +183,8 @@ async def c(ctx: commands.Context, *, message: str) -> None:
 
 @bot.command()
 async def whois(ctx: commands.Context, member: discord.Member = None) -> None:
-    if member == None: member = ctx.author
     '''Display information about a mentioned user. Format: !whois @mention'''
+    if member == None: member = ctx.author
     info = (
         f"**User Info:**\n"
         f"- Mention: {member.mention}\n"
