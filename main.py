@@ -3,6 +3,7 @@ from discord.ext import commands
 import discord
 from Gemini import Interface
 import os
+from random import randint
 
 API_KEY: str | None = os.getenv('API_KEY')
 
@@ -63,7 +64,9 @@ async def apply_timeout(
     reason: str | None = None
 ) -> None:
     '''applies timeout to a user'''
+    
     seconds = max(1, seconds)
+
     duration: datetime.timedelta = datetime.timedelta(minutes=seconds / 60)
 
     try:
@@ -97,16 +100,16 @@ async def addrole(ctx: discord.Member, role_name: str) -> None:
 
 ### moderator commands
 
-@bot.command()
+@bot.command(aliases=['timeout', 'gotojail'])
 @commands.has_role(moderator_role_name)
-async def timeout(
+async def mute(
     ctx: commands.Context,
     mention: str,
     seconds: int = 15,
     *,
     reason: str | None = None
 ) -> None:
-    '''Apply a timeout to a member - Format: !timeout @mention {seconds}'''
+    '''Apply a timeout to a member - Format: !mute @mention {seconds}'''
 
     required_role: str = moderator_role_name
 
@@ -115,7 +118,7 @@ async def timeout(
         return
 
     # limit the timeout
-    seconds = max(0, min(seconds, MAX_TIMEOUT))
+    # seconds = max(0, min(seconds, MAX_TIMEOUT))
 
     try:
         user_id: int = int(mention[2:-1])
@@ -132,10 +135,10 @@ async def timeout(
     except Exception as e:
         await ctx.send(f"❌ Error: {e}")
 
-@bot.command()
+@bot.command(aliases=['jailbreak', 'rtimeout'])
 @commands.has_role(moderator_role_name)
-async def jailbreak(ctx: commands.Context, member: discord.Member) -> None:
-    '''Remove a timeout from a member - Format: !jailbreak @mention'''
+async def unmute(ctx: commands.Context, member: discord.Member) -> None:
+    '''Remove a timeout from a member - Format: !unmute @mention'''
     try:
         await member.edit(timed_out_until=None)
         await ctx.send(f"✅ Timeout removed for {member.mention}.")
@@ -145,7 +148,7 @@ async def jailbreak(ctx: commands.Context, member: discord.Member) -> None:
         await ctx.send(f"❌ Failed to remove timeout: {e}")
 
 
-@bot.command()
+@bot.command(aliases=['makepoll', 'question'])
 @commands.has_role(moderator_role_name)
 async def poll(ctx: commands.Context, question: str, *, options: str):
     '''Create a poll - Format: !poll "{question}" {ans, ans2, ans3...}'''
@@ -166,23 +169,50 @@ async def poll(ctx: commands.Context, question: str, *, options: str):
 
 # regular commands
 
-@bot.command()
-async def test(ctx: commands.Context) -> None:
-    '''Does nothing'''
-    await ctx.send("testing...")
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send(error)
+    else:
+        raise error
 
-@bot.command()
+@bot.command(aliases=['hey', 'chat'])
 async def c(ctx: commands.Context, *, message: str) -> None:
-    '''Chat with google gemini - Format: !c {msg}  (DOES NOT HAVE MEMORY)'''
-    message = "limit your response to 1000 characters, here is the prompt:\n<START OF PROMPT>\nTry to format your response as if you only get one message with the user\n" + message + "<END OF PROMPT>"
-    response: str = chatbot.generate(message)
-    print(response)
-    await ctx.send(
-        response
-    )
+    '''Gemini 2.5 flash-lite - Format: !c {msg} (1000 rpd) (NO MEMORY)'''
+    chatbot = Interface(model = "gemini-2.5-flash-lite-preview-06-17")
+    
+    response: str = await chatbot.generate(f"Keep your message brief but detailed:\n<START OF PROMPT>\n{message}\n<END OF PROMPT>")
+    
+    # print(response, len(response))
 
-@bot.command()
-async def whois(ctx: commands.Context, member: discord.Member = None) -> None:
+    TEMPORARY_FILENAME = "Requested_response_is_longer_than_2000_tokens.txt"
+
+    if len(response) > 2000:
+
+        with open(TEMPORARY_FILENAME, 'w') as f:
+        
+            f.write(response)
+        
+        await sendfile(ctx, TEMPORARY_FILENAME)
+
+    else:
+        await ctx.send(
+            response
+        )
+
+async def sendfile(ctx, TEMPORARY_FILENAME: str):
+    # Ensure the file exists at this path
+    with open(TEMPORARY_FILENAME, 'rb') as f:
+        
+        file = discord.File(f, filename=TEMPORARY_FILENAME)
+
+        await ctx.send(" ", file=file)
+
+    with open(TEMPORARY_FILENAME, 'w') as f:
+        f.write("")
+
+@bot.command(aliases=['whois', 'user', 'me'])
+async def profile(ctx: commands.Context, member: discord.Member = None) -> None:
     '''Display information about a mentioned user. Format: !whois @mention'''
     if member == None: member = ctx.author
     info = (
@@ -197,6 +227,39 @@ async def whois(ctx: commands.Context, member: discord.Member = None) -> None:
         f"- Account Created: `{member.created_at.strftime('%Y-%m-%d %H:%M:%S')}`\n"
     )
     await ctx.send(info)
+
+@bot.command(aliases=['moderator'])
+async def playtester(ctx: commands.Context) -> None:
+    '''Adds playtester role to the author'''
+    await addrole(ctx.author, moderator_role_name)
+
+@bot.command(aliases=['rng', 'dice'])
+async def roll(ctx: commands.Context, *, roll: str = "") -> None:
+    '''rolls a dice - format: !roll {lower # (OPTIONAL)} {upper #(OPTIONAL)}'''
+    try:
+
+        match len(roll.split()):
+
+            case 2:
+            
+                low, high = int(roll.split()[0]), int(roll.split()[1])
+                
+                await ctx.send(randint(low, high))
+
+            case 1:
+
+                await ctx.send(randint(0, int(roll)))
+            
+            case _:
+
+                await ctx.send(randint(1, 6))
+    except:
+        await ctx.send("An error occured")
+
+@bot.command(aliases=['coinflip', 'coin'])
+async def flip(ctx: commands.Context) -> None:
+    '''coinflip - format: !flip'''
+    await ctx.send(":regional_indicator_h:" if randint(0, 1) else ":regional_indicator_t:")
 
 # run the bot
 if __name__ == "__main__":
