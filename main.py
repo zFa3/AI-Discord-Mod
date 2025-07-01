@@ -7,23 +7,23 @@ from random import randint
 
 API_KEY: str | None = os.getenv('API_KEY')
 
-intents: discord.Intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
+INTENTS: discord.Intents = discord.Intents.default()
+INTENTS.message_content = True
+INTENTS.members = True
 
 # max in seconds
-MAX_TIMEOUT = 60
+MAX_TIMEOUT = 2419200
 
 # save history
 FILENAME = "History.txt"
 
-moderator_role_name = "Playtester"
+MOD_ROLE_NAME = "Playtester"
 
 # gemini api
-chatbot: Interface = Interface()
+CHATBOT: Interface = Interface()
 
 # use the '!' prefix for commands
-bot: commands.Bot = commands.Bot(command_prefix='!', intents=intents)
+bot: commands.Bot = commands.Bot(command_prefix='!', intents=INTENTS)
 
 async def save_to_file(text):
     ''' save data to a file '''
@@ -101,7 +101,7 @@ async def addrole(ctx: discord.Member, role_name: str) -> None:
 ### moderator commands
 
 @bot.command(aliases=['timeout', 'gotojail'])
-@commands.has_role(moderator_role_name)
+@commands.has_role(MOD_ROLE_NAME)
 async def mute(
     ctx: commands.Context,
     mention: str,
@@ -111,14 +111,14 @@ async def mute(
 ) -> None:
     '''Apply a timeout to a member - Format: !mute @mention {seconds}'''
 
-    required_role: str = moderator_role_name
+    required_role: str = MOD_ROLE_NAME
 
     if not any(role.name == required_role for role in ctx.author.roles):
         await ctx.send("❌ You don't have permission to use this command.")
         return
 
     # limit the timeout
-    # seconds = max(0, min(seconds, MAX_TIMEOUT))
+    seconds = max(0, min(seconds, MAX_TIMEOUT))
 
     try:
         user_id: int = int(mention[2:-1])
@@ -136,7 +136,7 @@ async def mute(
         await ctx.send(f"❌ Error: {e}")
 
 @bot.command(aliases=['jailbreak', 'rtimeout'])
-@commands.has_role(moderator_role_name)
+@commands.has_role(MOD_ROLE_NAME)
 async def unmute(ctx: commands.Context, member: discord.Member) -> None:
     '''Remove a timeout from a member - Format: !unmute @mention'''
     try:
@@ -149,7 +149,7 @@ async def unmute(ctx: commands.Context, member: discord.Member) -> None:
 
 
 @bot.command(aliases=['makepoll', 'question'])
-@commands.has_role(moderator_role_name)
+@commands.has_role(MOD_ROLE_NAME)
 async def poll(ctx: commands.Context, question: str, *, options: str):
     '''Create a poll - Format: !poll "{question}" {ans, ans2, ans3...}'''
     number_emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
@@ -179,9 +179,9 @@ async def on_command_error(ctx, error):
 @bot.command(aliases=['hey', 'chat'])
 async def c(ctx: commands.Context, *, message: str) -> None:
     '''Gemini 2.5 flash-lite - Format: !c {msg} (1000 rpd) (NO MEMORY)'''
-    chatbot = Interface(model = "gemini-2.5-flash-lite-preview-06-17")
+    CHATBOT = Interface(model = "gemini-2.5-flash-lite-preview-06-17")
     
-    response: str = await chatbot.generate(f"Keep your message brief but detailed:\n<START OF PROMPT>\n{message}\n<END OF PROMPT>")
+    response: str = await CHATBOT.generate(f"Keep your message brief but detailed:\n<START OF PROMPT>\n{message}\n<END OF PROMPT>")
     
     # print(response, len(response))
 
@@ -231,7 +231,7 @@ async def profile(ctx: commands.Context, member: discord.Member = None) -> None:
 @bot.command(aliases=['moderator'])
 async def playtester(ctx: commands.Context) -> None:
     '''Adds playtester role to the author'''
-    await addrole(ctx.author, moderator_role_name)
+    await addrole(ctx.author, MOD_ROLE_NAME)
 
 @bot.command(aliases=['rng', 'dice'])
 async def roll(ctx: commands.Context, *, roll: str = "") -> None:
