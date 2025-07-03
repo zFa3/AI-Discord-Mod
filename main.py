@@ -12,11 +12,13 @@ INTENTS.message_content = True
 INTENTS.members = True
 
 # max in seconds
-MAX_TIMEOUT = 2419200
+MAX_TIMEOUT = 2419200 # 28 days
+MAX_TIMEOUT = 24192 # ~6 hours
 
 # save history
 FILENAME = "History.txt"
 
+ADMIN_ROLE_NAME = "Admin"
 MOD_ROLE_NAME = "Playtester"
 
 # gemini api
@@ -54,7 +56,6 @@ async def on_member_join(ctx: discord.Member) -> None:
     await ctx.guild.system_channel.send(f'Welcome {ctx.mention}!')
     await addrole(ctx, "Member")
 
-
 @commands.has_permissions(moderate_members=True)
 async def apply_timeout(
     ctx: commands.Context,
@@ -73,7 +74,7 @@ async def apply_timeout(
         await member.timeout(duration, reason=reason)
         await ctx.send(f'🔇 {member.mention} has been timed out for {seconds} second{"s" if seconds > 1 else ""}.')
     except Exception as e:
-        await ctx.send(f'❌ Failed to timeout member: {e}')
+        await ctx.send(f'❌ Failed to timeout member: {e}', delete_after=5)
 
 @commands.has_permissions(moderate_members=True)
 async def remove_timeout(
@@ -90,15 +91,46 @@ async def remove_timeout(
 
     except Exception as e:
 
-        await ctx.send(f'❌ Failed to remove timeout: {e}')
+        await ctx.send(f'❌ Failed to remove timeout: {e}', delete_after=5)
 
+async def sendfile(ctx, TEMPORARY_FILENAME: str):
+    # Ensure the file exists at this path
+    with open(TEMPORARY_FILENAME, 'rb') as f:
+        
+        file = discord.File(f, filename=TEMPORARY_FILENAME)
+
+        await ctx.send(" ", file=file)
+
+    with open(TEMPORARY_FILENAME, 'w') as f:
+        f.write("")
 
 async def addrole(ctx: discord.Member, role_name: str) -> None:
     role: discord.Role | None = discord.utils.get(ctx.guild.roles, name=role_name)
     await ctx.guild.system_channel.send(f"Role '{role_name}' has been applied")
     await ctx.add_roles(role)
 
-### moderator commands
+### Admin Commands
+
+@bot.command()
+@commands.has_role(ADMIN_ROLE_NAME)
+async def purge(ctx, amount: int):
+    '''Bulk purge messages - Format: !purge {# of messages}'''
+    if amount < 1:
+        await ctx.send("Enter a number > 0")
+        return
+    deleted = await ctx.channel.purge(limit=amount + 1)
+    await ctx.send(f"Deleted {len(deleted)-1} messages", delete_after=5)
+
+#TODO Test
+@bot.command()
+@commands.has_role(ADMIN_ROLE_NAME)
+async def slowmode(ctx, seconds: int):
+    '''applies slowmode to a channel\n'''
+    seconds = max(0, seconds) # limits to non negative integers
+    await ctx.channel.edit(slowmode_delay=seconds)
+    await ctx.send(f"Set slowmode to {seconds} seconds.")
+
+### Moderator Commands
 
 @bot.command(aliases=['timeout', 'gotojail'])
 @commands.has_role(MOD_ROLE_NAME)
@@ -110,12 +142,6 @@ async def mute(
     reason: str | None = None
 ) -> None:
     '''Apply a timeout to a member - Format: !mute @mention {seconds}'''
-
-    required_role: str = MOD_ROLE_NAME
-
-    if not any(role.name == required_role for role in ctx.author.roles):
-        await ctx.send("❌ You don't have permission to use this command.")
-        return
 
     # limit the timeout
     seconds = max(0, min(seconds, MAX_TIMEOUT))
@@ -133,7 +159,7 @@ async def mute(
         await ctx.send("Invalid mention format.")
 
     except Exception as e:
-        await ctx.send(f"❌ Error: {e}")
+        await ctx.send(f"❌ Error: {e}", delete_after=5)
 
 @bot.command(aliases=['jailbreak', 'rtimeout'])
 @commands.has_role(MOD_ROLE_NAME)
@@ -143,10 +169,9 @@ async def unmute(ctx: commands.Context, member: discord.Member) -> None:
         await member.edit(timed_out_until=None)
         await ctx.send(f"✅ Timeout removed for {member.mention}.")
     except discord.Forbidden:
-        await ctx.send("❌ I don't have permission to modify this user.")
+        await ctx.send("❌ I don't have permission to modify this user.", delete_after=5)
     except discord.HTTPException as e:
-        await ctx.send(f"❌ Failed to remove timeout: {e}")
-
+        await ctx.send(f"❌ Failed to remove timeout: {e}", delete_after=5)
 
 @bot.command(aliases=['makepoll', 'question'])
 @commands.has_role(MOD_ROLE_NAME)
@@ -156,7 +181,7 @@ async def poll(ctx: commands.Context, question: str, *, options: str):
     option_list = [opt.strip() for opt in options.split(",")]
 
     if not 2 <= len(option_list) <= 10:
-        await ctx.send("❌ You must provide between 2 and 10 options, separated by commas.")
+        await ctx.send("❌ You must provide between 2 and 10 options, separated by commas.", delete_after=5)
         return
 
     description = "\n".join(f"{number_emojis[i]} {opt}" for i, opt in enumerate(option_list))
@@ -167,7 +192,15 @@ async def poll(ctx: commands.Context, question: str, *, options: str):
     for i in range(len(option_list)):
         await poll_msg.add_reaction(number_emojis[i])
 
-# regular commands
+@bot.command(aliases=['nick'])
+@commands.has_role(MOD_ROLE_NAME)
+@commands.has_permissions(manage_nicknames=True)
+async def setnick(ctx, member: discord.Member, *, nickname: str):
+    '''Edit/change a member's nick'''
+    await member.edit(nick=nickname)
+    await ctx.send(f"Changed nickname for {member.mention} to `{nickname}`.")
+
+### Member Commands
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -200,17 +233,6 @@ async def c(ctx: commands.Context, *, message: str) -> None:
             response
         )
 
-async def sendfile(ctx, TEMPORARY_FILENAME: str):
-    # Ensure the file exists at this path
-    with open(TEMPORARY_FILENAME, 'rb') as f:
-        
-        file = discord.File(f, filename=TEMPORARY_FILENAME)
-
-        await ctx.send(" ", file=file)
-
-    with open(TEMPORARY_FILENAME, 'w') as f:
-        f.write("")
-
 @bot.command(aliases=['whois', 'user', 'me'])
 async def profile(ctx: commands.Context, member: discord.Member = None) -> None:
     '''Display information about a mentioned user. Format: !whois @mention'''
@@ -228,10 +250,14 @@ async def profile(ctx: commands.Context, member: discord.Member = None) -> None:
     )
     await ctx.send(info)
 
-@bot.command(aliases=['moderator'])
-async def playtester(ctx: commands.Context) -> None:
-    '''Adds playtester role to the author'''
-    await addrole(ctx.author, MOD_ROLE_NAME)
+@bot.command(aliases=['addrole', 'apply'])
+async def role(ctx: commands.Context, *, name: str = "") -> None:
+    '''applies a role to the member - Format: !role {rolename}'''
+    # cannot be Admin
+    if name == ADMIN_ROLE_NAME:
+        await ctx.send("Cannot add Admin")
+    else:
+        await addrole(ctx.author, name)
 
 @bot.command(aliases=['rng', 'dice'])
 async def roll(ctx: commands.Context, *, roll: str = "") -> None:
