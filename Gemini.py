@@ -3,21 +3,31 @@
 from google.genai import types, errors
 from google import genai
 from time import sleep
+import asyncio
 
 class Interface:
+
     def __init__(self, model: str = "gemini-2.0-flash-lite", temperature: float = 1.0) -> None:
 
         # try importing the google API key
         try:
-            with open("GOOGLE_API_KEY.txt") as file:
-                self.API_KEY: str = file.readline()
-        except Exception:
-            try:
-                import os
-                self.API_KEY = os.environ["GOOGLE_API_KEY"]
-            except Exception:
-                raise ValueError("No API key detected")
 
+            with open("GOOGLE_API_KEY.txt") as file:
+            
+                self.API_KEY: str = file.readline()
+        
+        except Exception:
+        
+            try:
+        
+                import os
+        
+                self.API_KEY = os.environ["GOOGLE_API_KEY"]
+        
+            except Exception:
+        
+                raise ValueError("No API key detected")
+            
         # some gemini models to choose from
         self.MODELS = {
             "gemini-2.0-flash-lite",
@@ -29,7 +39,7 @@ class Interface:
         self.attempts: int = 5
         self.temperature: float = temperature
 
-    def generate(self, prompt: str) -> str:
+    async def generate(self, prompt: str) -> str:
         client = genai.Client(api_key=self.API_KEY)
         contents = [
             types.Content(
@@ -43,25 +53,18 @@ class Interface:
             temperature=self.temperature,
         )
 
-        response: str = ""
-        for chunk in client.models.generate_content_stream(
-            model=self.model,
-            contents=contents,
-            config=generate_content_config,
-        ):
-            response += chunk.text
-        return response
+        def blocking_generate():
+            response = ""
+            for chunk in client.models.generate_content_stream(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            ):
+                response += chunk.text
+            return response
 
-    def safe_generate(self, prompt: str) -> str:
-        for _ in range(self.attempts):
-            try:
-                response = self.generate(prompt)
-                return response
-            except errors.APIError as error:
-                print(f"Error - code: {error.code}")
-                print("Retrying in 15s...")
-            sleep(15)
-        return ""
+        response = await asyncio.to_thread(blocking_generate)
+        return response
 
     def set_api_key(self, key: str) -> None:
         self.API_KEY = key
