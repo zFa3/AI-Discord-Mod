@@ -56,14 +56,11 @@ async def on_message(message: discord.Message) -> None:
     if MODERATE_MESSAGES:
         pass
         # TODO ADD AI MODERATION
-
     content = f"Message from {message.author} at {time.strftime('%Y-%m-%d %H:%M:%S')}: {message.content}"
 
     if SAVE_HISTORY:
         save_to_file(content)
-
-    print(content)
-
+    # print(content)
     await bot.process_commands(message)
 
 @bot.event
@@ -141,7 +138,7 @@ async def slowmode(ctx, seconds: int):
 async def mute(
     ctx: commands.Context,
     mention: str,
-    seconds: int = 15,
+    seconds: int = 15, # defaults to 15 seconds
     *,
     reason: str | None = None
 ) -> None:
@@ -214,6 +211,7 @@ async def role(ctx: commands.Context, member: discord.Member, *, role_name: str 
 
 @bot.event
 async def on_command_error(ctx, error):
+    # in the event of a typo
     if isinstance(error, commands.CommandNotFound):
         await ctx.send(error)
     else:
