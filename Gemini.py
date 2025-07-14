@@ -6,28 +6,14 @@ from time import sleep
 import asyncio
 
 class Interface:
-
     def __init__(self, model: str = "gemini-2.0-flash-lite", temperature: float = 1.0) -> None:
-
-        # try importing the google API key
+        # Google API Key
         try:
-
-            with open("GOOGLE_API_KEY.txt") as file:
-            
-                self.API_KEY: str = file.readline()
-        
+            import os
+            self.API_KEY = os.environ["GOOGLE_API_KEY"]
         except Exception:
-        
-            try:
-        
-                import os
-        
-                self.API_KEY = os.environ["GOOGLE_API_KEY"]
-        
-            except Exception:
-        
-                raise ValueError("No API key detected")
-            
+            raise ValueError("No API key detected, ensure a Google API key is present in .env")
+
         # some gemini models to choose from
         self.MODELS = {
             "gemini-2.0-flash-lite",
@@ -53,7 +39,7 @@ class Interface:
             temperature=self.temperature,
         )
 
-        def blocking_generate():
+        def wait_for_response():
             response = ""
             for chunk in client.models.generate_content_stream(
                 model=self.model,
@@ -63,8 +49,22 @@ class Interface:
                 response += chunk.text
             return response
 
-        response = await asyncio.to_thread(blocking_generate)
+        response = await asyncio.to_thread(wait_for_response)
         return response
+
+    # use for unstable connections, allows script to retry
+    def safe_generate(self, prompt: str) -> str:
+        for _ in range(self.attempts):
+            try:
+                response = self.generate(prompt)
+                return response
+            except errors.APIError as error:
+                print(f"Error - code: {error.code}")
+                print("Retrying in 15s...")
+            sleep(15)
+        return ""
+
+    # setters
 
     def set_api_key(self, key: str) -> None:
         self.API_KEY = key
